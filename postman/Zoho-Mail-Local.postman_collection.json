@@ -1,0 +1,183 @@
+{
+  "info": {
+    "name": "Zoho Mail Local",
+    "description": "Local ORG/instance-level OAuth Zoho Mail capability test collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health"
+      }
+    },
+    {
+      "name": "2. Start Zoho Authorization",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/zoho/authorize",
+        "description": "Open this in a browser. Postman will follow redirect to Zoho ORG consent."
+      }
+    },
+    {
+      "name": "3. OAuth Callback information",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/zoho/token-status",
+        "description": "Shows whether tokens were stored after callback. Secrets are never returned."
+      }
+    },
+    {
+      "name": "4. Refresh Token",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/api/zoho/refresh"
+      }
+    },
+    {
+      "name": "5. Organization Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/zoho/organization"
+      }
+    },
+    {
+      "name": "6. Organization Users",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/zoho/users?start=0&limit=50",
+          "host": ["{{base_url}}"],
+          "path": ["api", "zoho", "users"],
+          "query": [
+            { "key": "start", "value": "0" },
+            { "key": "limit", "value": "50" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "7. Accounts",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/zoho/accounts"
+      }
+    },
+    {
+      "name": "8. Folders",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/zoho/accounts/{{account_id}}/folders"
+      }
+    },
+    {
+      "name": "9. List Emails",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/zoho/accounts/{{account_id}}/messages?folderId={{folder_id}}&limit=20&start=1",
+          "host": ["{{base_url}}"],
+          "path": ["api", "zoho", "accounts", "{{account_id}}", "messages"],
+          "query": [
+            { "key": "folderId", "value": "{{folder_id}}" },
+            { "key": "limit", "value": "20" },
+            { "key": "start", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "10. Get Email Content",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/zoho/accounts/{{account_id}}/messages/{{message_id}}?folderId={{folder_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "zoho", "accounts", "{{account_id}}", "messages", "{{message_id}}"],
+          "query": [{ "key": "folderId", "value": "{{folder_id}}" }]
+        }
+      }
+    },
+    {
+      "name": "11. Get Attachment Info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/zoho/accounts/{{account_id}}/messages/{{message_id}}/attachments?folderId={{folder_id}}",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "zoho",
+            "accounts",
+            "{{account_id}}",
+            "messages",
+            "{{message_id}}",
+            "attachments"
+          ],
+          "query": [{ "key": "folderId", "value": "{{folder_id}}" }]
+        }
+      }
+    },
+    {
+      "name": "12. Download Attachment",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/zoho/accounts/{{account_id}}/messages/{{message_id}}/attachments/{{attachment_id}}/download?folderId={{folder_id}}",
+          "host": ["{{base_url}}"],
+          "path": [
+            "api",
+            "zoho",
+            "accounts",
+            "{{account_id}}",
+            "messages",
+            "{{message_id}}",
+            "attachments",
+            "{{attachment_id}}",
+            "download"
+          ],
+          "query": [{ "key": "folderId", "value": "{{folder_id}}" }]
+        }
+      }
+    },
+    {
+      "name": "13. Test One User",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/zoho/test-user?email={{test_email}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "zoho", "test-user"],
+          "query": [{ "key": "email", "value": "{{test_email}}" }]
+        }
+      }
+    },
+    {
+      "name": "14. Test All Users",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/zoho/test-all-users?limit=5",
+          "host": ["{{base_url}}"],
+          "path": ["api", "zoho", "test-all-users"],
+          "query": [{ "key": "limit", "value": "5" }]
+        }
+      }
+    }
+  ]
+}

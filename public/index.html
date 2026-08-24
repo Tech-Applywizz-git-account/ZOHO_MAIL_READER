@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zoho Mail Connector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div>
+        <p class="brand">ApplyWizard · Zoho Mail</p>
+        <h1>Mailbox connector</h1>
+      </div>
+      <div class="stats" id="stats">Loading…</div>
+    </header>
+
+    <main class="layout">
+      <section class="panel users-panel">
+        <div class="panel-head">
+          <h2>Users</h2>
+          <input id="search" type="search" placeholder="Filter by email…" autocomplete="off" />
+        </div>
+        <div class="filters">
+          <button type="button" class="chip active" data-filter="all">All</button>
+          <button type="button" class="chip" data-filter="connected">Connected</button>
+          <button type="button" class="chip" data-filter="pending">Pending</button>
+        </div>
+        <div id="userList" class="user-list" role="listbox" aria-label="Organization users"></div>
+      </section>
+
+      <section class="panel detail-panel">
+        <div id="emptyState" class="empty">
+          <h2>Select a user</h2>
+          <p>Pick someone from the list, paste their Self Client code to connect, then read their inbox.</p>
+        </div>
+
+        <div id="detail" class="detail hidden">
+          <div class="detail-head">
+            <div>
+              <p class="eyebrow" id="userStatus">—</p>
+              <h2 id="userEmail">—</h2>
+              <p class="meta" id="userMeta"></p>
+            </div>
+            <button type="button" id="refreshUsers" class="ghost">Refresh list</button>
+          </div>
+
+          <div id="connectBlock" class="card-block">
+            <h3>Connect mailbox</h3>
+            <p class="hint" style="margin-top:0">
+              <strong>Use Zoho login</strong> for other users. Self Client paste only works
+              for the account that owns the API client (usually admin).
+            </p>
+            <a id="oauthConnectBtn" class="primary link-btn" href="#">Connect via Zoho login</a>
+            <p class="hint">
+              Open that link in an incognito window and sign in as
+              <strong id="oauthEmailHint">this user</strong>, then Allow.
+            </p>
+
+            <details class="advanced">
+              <summary>Advanced: Self Client code (admin / same-owner only)</summary>
+              <ol class="steps">
+                <li>Log into Zoho as the <strong>API Console owner</strong> (same Client ID as this app).</li>
+                <li>Open <a id="consoleLink" href="https://api-console.zoho.in/" target="_blank" rel="noreferrer">API Console → Self Client</a>.</li>
+                <li>Generate Code with the scopes below and paste within ~1 minute.</li>
+              </ol>
+              <pre class="scopes" id="scopesBox"></pre>
+              <label class="field">
+                <span>Self Client code</span>
+                <textarea id="codeInput" rows="3" placeholder="Paste grant token / code here"></textarea>
+              </label>
+              <button type="button" id="connectBtn" class="ghost">Connect with pasted code</button>
+              <p class="hint" id="connectHint"></p>
+            </details>
+          </div>
+
+          <div id="readBlock" class="card-block hidden">
+            <div class="read-actions">
+              <h3>Inbox</h3>
+              <button type="button" id="readMailsBtn" class="primary">Read mails</button>
+            </div>
+            <div id="mailLayout" class="mail-layout hidden">
+              <div id="messageList" class="message-list"></div>
+              <article id="messageBody" class="message-body">
+                <p class="muted">Select a message to view the body.</p>
+              </article>
+            </div>
+          </div>
+
+          <p class="toast" id="toast" hidden></p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+# https://docs.render.com/blueprint-spec
+services:
+  - type: web
+    name: zoho-mail-reader
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ZOHO_CLIENT_ID
+        sync: false
+      - key: ZOHO_CLIENT_SECRET
+        sync: false
+      # Must match Zoho Server-based Authorized Redirect URI exactly, e.g.
+      # https://zoho-mail-reader.onrender.com/api/zoho/callback
+      - key: ZOHO_REDIRECT_URI
+        sync: false
+      - key: ZOHO_OAUTH_MODE
+        value: server
+      - key: ZOHO_ACCOUNTS_URL
+        value: https://accounts.zoho.in
+      - key: ZOHO_API_DOMAIN
+        value: https://mail.zoho.in
+      - key: ZOHO_ZOID
+        sync: false
+      - key: ZOHO_SCOPES
+        value: ZohoMail.organization.accounts.ALL,ZohoMail.accounts.ALL,ZohoMail.folders.ALL,ZohoMail.messages.ALL
+      - key: DATABASE_URL
+        sync: false

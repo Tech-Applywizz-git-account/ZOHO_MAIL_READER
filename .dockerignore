@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+npm-debug.log*
+yarn-error.log*
+
+# Secrets / local data
+.env
+.env.*
+!.env.example
+.data/
+downloads/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+.idea/
+.vscode/

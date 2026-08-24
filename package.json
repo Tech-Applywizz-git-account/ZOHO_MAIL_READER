@@ -1,0 +1,36 @@
+{
+  "name": "zoho-mail-reader",
+  "version": "1.0.0",
+  "description": "Local Zoho ORG/instance-level OAuth mail reader for organization-wide capability testing",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "zoho",
+    "mail",
+    "oauth",
+    "organization"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "axios": "^1.11.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.23",
+    "@types/node": "^22.17.1",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  }
+}
