@@ -1,4 +1,6 @@
 (() => {
+  const PAGE_SIZE = 40;
+
   const state = {
     users: [],
     scopes: "",
@@ -7,6 +9,11 @@
     search: "",
     selectedEmail: null,
     inbox: null,
+    messages: [],
+    nextStart: 1,
+    hasMore: false,
+    loadingMore: false,
+    totalMatched: 0,
   };
 
   const el = {
@@ -28,6 +35,8 @@
     oauthConnectBtn: document.getElementById("oauthConnectBtn"),
     oauthEmailHint: document.getElementById("oauthEmailHint"),
     readMailsBtn: document.getElementById("readMailsBtn"),
+    loadMoreBtn: document.getElementById("loadMoreBtn"),
+    inboxMeta: document.getElementById("inboxMeta"),
     mailLayout: document.getElementById("mailLayout"),
     messageList: document.getElementById("messageList"),
     messageBody: document.getElementById("messageBody"),
@@ -162,11 +171,16 @@
   function selectUser(email) {
     state.selectedEmail = email;
     state.inbox = null;
+    state.messages = [];
+    state.nextStart = 1;
+    state.hasMore = false;
     el.codeInput.value = "";
     el.messageList.innerHTML = "";
     el.messageBody.innerHTML =
       '<p class="muted">Select a message to view the body.</p>';
     el.mailLayout.classList.add("hidden");
+    if (el.loadMoreBtn) el.loadMoreBtn.classList.add("hidden");
+    if (el.inboxMeta) el.inboxMeta.textContent = "";
     renderUsers();
     renderDetail();
   }
@@ -202,6 +216,52 @@
     }
   }
 
+  async function fetchInboxPage(start, { append }) {
+    const user = selectedUser();
+    if (!user?.connected) return;
+
+    const qs = new URLSearchParams({
+      email: user.email,
+      limit: String(PAGE_SIZE),
+      start: String(start),
+    });
+    const data = await api(`/api/zoho/ui/inbox?${qs}`);
+
+    state.inbox = {
+      email: data.email,
+      accountId: data.accountId,
+      inbox: data.folder || data.inbox,
+      view: data.view,
+    };
+    state.messages = append
+      ? [...state.messages, ...(data.messages || [])]
+      : data.messages || [];
+    state.hasMore = Boolean(data.hasMore);
+    state.nextStart = data.nextStart || start + (data.messages?.length || 0);
+    state.totalMatched = data.totalMatched || state.messages.length;
+
+    el.mailLayout.classList.remove("hidden");
+    renderMessageList({ resetBody: !append });
+    updateInboxMeta();
+    return data;
+  }
+
+  function updateInboxMeta() {
+    if (!el.inboxMeta) return;
+    el.inboxMeta.textContent = state.messages.length
+      ? `· ${state.messages.length}${
+          state.totalMatched ? `/${state.totalMatched}` : ""
+        } loaded · latest → older · all folders`
+      : "";
+    if (el.loadMoreBtn) {
+      el.loadMoreBtn.classList.toggle("hidden", !state.hasMore);
+      el.loadMoreBtn.disabled = state.loadingMore;
+      el.loadMoreBtn.textContent = state.loadingMore
+        ? "Loading…"
+        : "Load more";
+    }
+  }
+
   async function readMails() {
     const user = selectedUser();
     if (!user?.connected) return;
@@ -209,13 +269,11 @@
     el.readMailsBtn.disabled = true;
     el.readMailsBtn.textContent = "Loading…";
     try {
-      const data = await api(
-        `/api/zoho/ui/inbox?email=${encodeURIComponent(user.email)}&limit=40`
+      const data = await fetchInboxPage(1, { append: false });
+      showToast(
+        `Loaded ${data.count} messages (latest → older)`,
+        "ok"
       );
-      state.inbox = data;
-      el.mailLayout.classList.remove("hidden");
-      renderMessageList(data);
-      showToast(`Loaded ${data.messages.length} inbox messages`, "ok");
     } catch (error) {
       showToast(error.message || String(error), "err");
     } finally {
@@ -224,18 +282,36 @@
     }
   }
 
-  function renderMessageList(inbox) {
-    el.messageList.innerHTML = "";
-    el.messageBody.innerHTML =
-      '<p class="muted">Select a message to view the body.</p>';
+  async function loadMoreMails() {
+    if (!state.hasMore || state.loadingMore) return;
+    state.loadingMore = true;
+    updateInboxMeta();
+    try {
+      const data = await fetchInboxPage(state.nextStart, { append: true });
+      showToast(`Loaded ${data.count} more · total ${state.messages.length}`, "ok");
+    } catch (error) {
+      showToast(error.message || String(error), "err");
+    } finally {
+      state.loadingMore = false;
+      updateInboxMeta();
+    }
+  }
 
-    if (!inbox.messages?.length) {
+  function renderMessageList({ resetBody = true } = {}) {
+    el.messageList.innerHTML = "";
+    if (resetBody) {
+      el.messageBody.innerHTML =
+        '<p class="muted">Select a message to view the body.</p>';
+    }
+
+    if (!state.messages.length) {
       el.messageList.innerHTML =
         '<p class="muted" style="padding:0.75rem">Inbox is empty.</p>';
+      updateInboxMeta();
       return;
     }
 
-    for (const msg of inbox.messages) {
+    for (const msg of state.messages) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "msg-item";
@@ -253,6 +329,7 @@
       });
       el.messageList.appendChild(btn);
     }
+    updateInboxMeta();
   }
 
   async function loadMessageBody(msg) {
@@ -260,9 +337,15 @@
     const inbox = state.inbox;
     if (!user || !inbox) return;
 
+    const folderId = msg.folderId || inbox.inbox?.folderId;
+    if (!folderId) {
+      el.messageBody.innerHTML =
+        '<p class="toast err">Missing folderId for this message — cannot load body.</p>';
+      return;
+    }
+
     el.messageBody.innerHTML = '<p class="muted">Loading body…</p>';
     try {
-      const folderId = msg.folderId || inbox.inbox.folderId;
       const qs = new URLSearchParams({
         email: user.email,
         accountId: inbox.accountId,
@@ -357,6 +440,9 @@
   });
   el.connectBtn.addEventListener("click", connectMailbox);
   el.readMailsBtn.addEventListener("click", readMails);
+  if (el.loadMoreBtn) {
+    el.loadMoreBtn.addEventListener("click", loadMoreMails);
+  }
   el.refreshUsers.addEventListener("click", () => {
     loadUsers(true).catch((e) => showToast(e.message, "err"));
   });

@@ -80,11 +80,14 @@
 
           <div id="readBlock" class="card-block hidden">
             <div class="read-actions">
-              <h3>Inbox</h3>
+              <h3>All Messages <span class="meta" id="inboxMeta"></span></h3>
               <button type="button" id="readMailsBtn" class="primary">Read mails</button>
             </div>
             <div id="mailLayout" class="mail-layout hidden">
-              <div id="messageList" class="message-list"></div>
+              <div class="message-col">
+                <div id="messageList" class="message-list"></div>
+                <button type="button" id="loadMoreBtn" class="ghost load-more hidden">Load more</button>
+              </div>
               <article id="messageBody" class="message-body">
                 <p class="muted">Select a message to view the body.</p>
               </article>

@@ -78,10 +78,29 @@ export async function findInboxFolder(
   mailboxEmail?: string
 ): Promise<FolderSummary | null> {
   const folders = await getFolders(accountId, mailboxEmail);
+  // Prefer name/path — custom folders like Newsletter also use folderType "Inbox".
   return (
-    folders.find((f) => f.folderType?.toLowerCase() === "inbox") ||
     folders.find((f) => f.folderName.toLowerCase() === "inbox") ||
     folders.find((f) => f.path?.toLowerCase() === "/inbox") ||
+    folders.find((f) => f.folderType?.toLowerCase() === "inbox") ||
+    null
+  );
+}
+
+/** Zoho UI "All Messages" view — may appear as a real folder or as a virtual view. */
+export async function findAllMessagesFolder(
+  accountId: string,
+  mailboxEmail?: string
+): Promise<FolderSummary | null> {
+  const folders = await getFolders(accountId, mailboxEmail);
+  const name = (f: FolderSummary) =>
+    `${f.folderName} ${f.path || ""} ${f.folderType || ""}`.toLowerCase();
+
+  return (
+    folders.find((f) => /all\s*messages/.test(name(f))) ||
+    folders.find((f) => /all\s*mails?/.test(name(f))) ||
+    folders.find((f) => f.folderType?.toLowerCase() === "all") ||
+    folders.find((f) => f.path?.toLowerCase() === "/all") ||
     null
   );
 }
@@ -94,10 +113,14 @@ export async function listMessages(
     start?: number;
     search?: string;
     mailboxEmail?: string;
+    /** When true, omit folderId and include sent/archive (All Messages style). */
+    allMessages?: boolean;
+    includeSent?: boolean;
+    includeArchive?: boolean;
   }
 ): Promise<MessageSummary[]> {
   const limit = Math.min(Math.max(options?.limit ?? 20, 1), 200);
-  const start = options?.start ?? 1;
+  const start = Math.max(options?.start ?? 1, 1);
   const auth = await resolveMailAuth(options?.mailboxEmail);
 
   if (options?.search) {
@@ -109,6 +132,11 @@ export async function listMessages(
         searchKey: options.search,
         limit,
         start,
+        includeto: true,
+        // Emails received before "now" — required for search to return history
+        receivedTime: Date.now(),
+        sortBy: "date",
+        sortorder: false, // descending = newest first
       },
       context: {
         action: "searchMessages",
@@ -117,16 +145,33 @@ export async function listMessages(
       },
       ...auth,
     });
-    return asArray(response.data).map(mapMessage);
+    return sortNewestFirst(asArray(response.data).map(mapMessage));
   }
 
   const params: Record<string, unknown> = {
     limit,
     start,
     includeto: true,
+    sortBy: "date",
+    // Zoho: false = descending (latest → older)
+    sortorder: false,
   };
-  if (options?.folderId) {
-    params.folderId = options.folderId;
+
+  if (options?.allMessages) {
+    // Virtual All Messages view: no folder filter; include sent + archived
+    params.includesent = true;
+    params.includearchive = true;
+    params.status = "all";
+  } else {
+    if (options?.folderId) {
+      params.folderId = options.folderId;
+    }
+    if (options?.includeSent) {
+      params.includesent = true;
+    }
+    if (options?.includeArchive) {
+      params.includearchive = true;
+    }
   }
 
   const response = await zohoMailRequest<
@@ -139,11 +184,150 @@ export async function listMessages(
       accountId,
       folderId: options?.folderId,
       mailboxEmail: options?.mailboxEmail,
+      allMessages: options?.allMessages,
+      start,
+      limit,
     },
     ...auth,
   });
 
-  return asArray(response.data).map(mapMessage);
+  return sortNewestFirst(asArray(response.data).map(mapMessage));
+}
+
+const ALL_MESSAGES_EXCLUDE = new Set([
+  "spam",
+  "trash",
+  "drafts",
+  "templates",
+  "outbox",
+]);
+
+function isAllMessagesFolder(folder: FolderSummary): boolean {
+  const type = (folder.folderType || "").toLowerCase();
+  const name = folder.folderName.toLowerCase();
+  if (ALL_MESSAGES_EXCLUDE.has(type) || ALL_MESSAGES_EXCLUDE.has(name)) {
+    return false;
+  }
+  return Boolean(folder.folderId);
+}
+
+async function listFolderMessagesUpTo(
+  accountId: string,
+  folderId: string,
+  mailboxEmail: string | undefined,
+  maxMessages: number
+): Promise<MessageSummary[]> {
+  const collected: MessageSummary[] = [];
+  let start = 1;
+  const pageSize = 200;
+
+  while (collected.length < maxMessages) {
+    const remaining = maxMessages - collected.length;
+    const limit = Math.min(pageSize, remaining);
+    const page = await listMessages(accountId, {
+      folderId,
+      limit,
+      start,
+      mailboxEmail,
+    });
+    collected.push(...page);
+    if (page.length < limit) {
+      break;
+    }
+    start += page.length;
+  }
+
+  return collected;
+}
+
+/**
+ * Zoho UI "All messages" view (#mail/views/all): every folder except
+ * Spam/Trash/Drafts/Templates/Outbox (includes Inbox, Newsletter, Notification, Sent, Archive, …).
+ */
+export async function listAllMessages(
+  accountId: string,
+  options?: {
+    limit?: number;
+    start?: number;
+    mailboxEmail?: string;
+  }
+): Promise<{
+  messages: MessageSummary[];
+  view: "all_folders_merged";
+  folder: FolderSummary;
+  totalMatched: number;
+  foldersScanned: Array<{ folderName: string; folderId: string; count: number }>;
+}> {
+  const limit = Math.min(Math.max(options?.limit ?? 40, 1), 200);
+  const start = Math.max(options?.start ?? 1, 1);
+  const mailboxEmail = options?.mailboxEmail;
+
+  const folders = (await getFolders(accountId, mailboxEmail)).filter(
+    isAllMessagesFolder
+  );
+
+  // Fetch enough from each folder to build a correct global latest→older page.
+  // Cap per folder so we don't pull unbounded history on huge mailboxes.
+  const perFolderCap = Math.min(1000, Math.max(200, start + limit - 1));
+
+  const scanned: Array<{ folderName: string; folderId: string; count: number }> =
+    [];
+  const byId = new Map<string, MessageSummary>();
+
+  // Sequential-ish batches of 3 to avoid Zoho rate limits
+  const concurrency = 3;
+  for (let i = 0; i < folders.length; i += concurrency) {
+    const batch = folders.slice(i, i + concurrency);
+    const pages = await Promise.all(
+      batch.map(async (folder) => {
+        const messages = await listFolderMessagesUpTo(
+          accountId,
+          folder.folderId,
+          mailboxEmail,
+          perFolderCap
+        );
+        return { folder, messages };
+      })
+    );
+
+    for (const { folder, messages } of pages) {
+      scanned.push({
+        folderName: folder.folderName,
+        folderId: folder.folderId,
+        count: messages.length,
+      });
+      for (const msg of messages) {
+        if (msg.messageId && !byId.has(msg.messageId)) {
+          byId.set(msg.messageId, msg);
+        }
+      }
+    }
+  }
+
+  const merged = sortNewestFirst([...byId.values()]);
+  const offset = start - 1;
+  const page = merged.slice(offset, offset + limit);
+
+  return {
+    messages: page,
+    view: "all_folders_merged",
+    totalMatched: merged.length,
+    foldersScanned: scanned,
+    folder: {
+      folderId: "",
+      folderName: "All Messages",
+      folderType: "All",
+      path: "/All Messages",
+    },
+  };
+}
+
+function sortNewestFirst(messages: MessageSummary[]): MessageSummary[] {
+  return [...messages].sort((a, b) => {
+    const ta = Number(a.receivedTime) || 0;
+    const tb = Number(b.receivedTime) || 0;
+    return tb - ta;
+  });
 }
 
 function mapMessage(raw: Record<string, unknown>): MessageSummary {
@@ -153,7 +337,9 @@ function mapMessage(raw: Record<string, unknown>): MessageSummary {
     from: String(raw.fromAddress ?? raw.sender ?? ""),
     to: String(raw.toAddress ?? ""),
     cc: String(raw.ccAddress ?? ""),
-    receivedTime: String(raw.receivedTime ?? raw.sentDateInGMT ?? ""),
+    receivedTime: String(
+      raw.receivedTime ?? raw.receivedtime ?? raw.sentDateInGMT ?? ""
+    ),
     hasAttachment: truthyAttachment(raw.hasAttachment),
     folderId: raw.folderId !== undefined ? String(raw.folderId) : undefined,
   };

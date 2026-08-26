@@ -357,6 +357,23 @@ h3 {
   min-height: 360px;
 }
 
+.message-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.load-more {
+  width: 100%;
+}
+
+#inboxMeta {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .message-list {
   border: 1px solid var(--line);
   border-radius: 8px;

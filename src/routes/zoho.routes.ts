@@ -18,10 +18,10 @@ import {
 } from "../services/zohoMailboxAuth.service";
 import {
   downloadAttachment,
-  findInboxFolder,
   getAttachmentInfo,
   getFolders,
   getMessageContent,
+  listAllMessages,
   listMessages,
 } from "../services/zohoMail.service";
 import {
@@ -365,24 +365,36 @@ router.get(
       return;
     }
 
-    const limit = req.query.limit ? Number(req.query.limit) : 30;
-    const inbox = await findInboxFolder(accountId, email);
-    if (!inbox) {
-      res.status(404).json({ error: "Inbox folder not found" });
-      return;
-    }
+    const limit = Math.min(
+      Math.max(req.query.limit ? Number(req.query.limit) : 40, 1),
+      200
+    );
+    const start = Math.max(req.query.start ? Number(req.query.start) : 1, 1);
 
-    const messages = await listMessages(accountId, {
-      folderId: inbox.folderId,
+    const listed = await listAllMessages(accountId, {
       limit,
-      start: 1,
+      start,
       mailboxEmail: email,
     });
+
+    const messages = listed.messages;
+    const hasMore = start - 1 + messages.length < listed.totalMatched;
+    const nextStart = start + messages.length;
 
     res.json({
       email,
       accountId,
-      inbox,
+      view: listed.view,
+      inbox: listed.folder,
+      folder: listed.folder,
+      sort: "latest_to_oldest",
+      start,
+      limit,
+      count: messages.length,
+      totalMatched: listed.totalMatched,
+      foldersScanned: listed.foldersScanned,
+      hasMore,
+      nextStart,
       messages,
     });
   })
