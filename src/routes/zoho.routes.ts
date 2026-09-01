@@ -31,6 +31,7 @@ import {
 } from "../services/zohoOrganization.service";
 import { getCachedOrganizationAccounts } from "../services/orgUsersCache";
 import { testAllUsers, testOneUser } from "../services/zohoTest.service";
+import { findGreenhouseSecurityCode } from "../services/greenhouseSecurityCode.service";
 import { logger } from "../utils/logger";
 
 const router = Router();
@@ -642,6 +643,49 @@ router.get(
       message: "Attachment downloaded",
       ...downloaded,
     });
+  })
+);
+
+router.get(
+  "/greenhouse-security-code",
+  asyncHandler(async (req, res) => {
+    const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
+    if (!email || !email.includes("@")) {
+      res.status(400).json({
+        found: false,
+        reason: "invalid_email",
+        error: "Query parameter email is required",
+        example:
+          "/api/zoho/greenhouse-security-code?email=user@applywizard.ai&company=Block&receivedAfter=1710000000000",
+      });
+      return;
+    }
+
+    const company =
+      typeof req.query.company === "string" ? req.query.company.trim() : "";
+    const receivedRaw =
+      typeof req.query.receivedAfter === "string"
+        ? req.query.receivedAfter.trim()
+        : "";
+    let receivedAfterMs: number | undefined;
+    if (receivedRaw) {
+      const asNumber = Number(receivedRaw);
+      if (Number.isFinite(asNumber) && asNumber > 0) {
+        receivedAfterMs = asNumber < 1e12 ? asNumber * 1000 : asNumber;
+      } else {
+        const parsed = Date.parse(receivedRaw);
+        if (!Number.isNaN(parsed)) {
+          receivedAfterMs = parsed;
+        }
+      }
+    }
+
+    const result = await findGreenhouseSecurityCode({
+      email,
+      company: company || undefined,
+      receivedAfterMs,
+    });
+    res.json(result);
   })
 );
 
