@@ -2,6 +2,7 @@ import { mailboxStore } from "../store/mailboxStore";
 import { logger } from "../utils/logger";
 import {
   findInboxFolder,
+  getFolders,
   getMessageContent,
   listMessages,
 } from "./zohoMail.service";
@@ -70,7 +71,10 @@ function isGreenhouseSecurityMail(from: string, subject: string): boolean {
   const fromLower = (from || "").toLowerCase();
   const subjectLower = (subject || "").toLowerCase();
   const fromOk = FROM_HINTS.some((hint) => fromLower.includes(hint));
-  return fromOk && subjectLower.includes(SUBJECT_HINT);
+  const subjectOk =
+    subjectLower.includes(SUBJECT_HINT) ||
+    subjectLower.includes("security code");
+  return subjectOk || fromOk;
 }
 
 function companyMatches(subject: string, company?: string): boolean {
@@ -110,29 +114,66 @@ export async function findGreenhouseSecurityCode(params: {
       : Date.now() - 15 * 60 * 1000;
 
   const inbox = await findInboxFolder(mailbox.accountId, email);
-  let listed = await listMessages(mailbox.accountId, {
-    search: "Security code for your application",
-    limit: 30,
-    start: 1,
-    mailboxEmail: email,
-  }).catch(() => []);
+  const folders = await getFolders(mailbox.accountId, email).catch(() => []);
+  const scanFolders = folders.filter((folder) => {
+    const name = `${folder.folderName} ${folder.path || ""} ${folder.folderType || ""}`.toLowerCase();
+    return (
+      name.includes("inbox") ||
+      name.includes("notification") ||
+      name.includes("alerts")
+    );
+  });
+  if (inbox && !scanFolders.some((folder) => folder.folderId === inbox.folderId)) {
+    scanFolders.unshift(inbox);
+  }
 
-  if (!listed.length) {
-    listed = await listMessages(mailbox.accountId, {
-      folderId: inbox?.folderId,
+  const listed: Awaited<ReturnType<typeof listMessages>> = [];
+  const seen = new Set<string>();
+  const foldersToScan = scanFolders.length ? scanFolders : inbox ? [inbox] : [];
+  for (const folder of foldersToScan) {
+    const page = await listMessages(mailbox.accountId, {
+      folderId: folder.folderId,
       limit: 40,
       start: 1,
       mailboxEmail: email,
+    }).catch((error) => {
+      logger.warn("Failed to list folder for Greenhouse security code", {
+        email,
+        folderId: folder.folderId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
     });
+    for (const msg of page) {
+      if (msg.messageId && !seen.has(msg.messageId)) {
+        seen.add(msg.messageId);
+        listed.push({
+          ...msg,
+          folderId: msg.folderId || folder.folderId,
+        });
+      }
+    }
   }
 
-  const candidates = listed.filter((msg) => {
+  listed.sort((a, b) => parseReceivedMs(b.receivedTime) - parseReceivedMs(a.receivedTime));
+
+  let candidates = listed.filter((msg) => {
     if (!isGreenhouseSecurityMail(msg.from, msg.subject)) {
       return false;
     }
     const received = parseReceivedMs(msg.receivedTime);
     return !received || received >= receivedAfterMs;
   });
+
+  // List metadata is sometimes missing from/subject; inspect the newest mails.
+  if (!candidates.length) {
+    candidates = listed
+      .filter((msg) => {
+        const received = parseReceivedMs(msg.receivedTime);
+        return !received || received >= receivedAfterMs;
+      })
+      .slice(0, 12);
+  }
 
   type Parsed = {
     code: string;

@@ -129,14 +129,15 @@ export async function listMessages(
     >({
       path: `/api/accounts/${accountId}/messages/search`,
       params: {
-        searchKey: options.search,
+        // Zoho searchKey must use search syntax (subject:/sender:/entire:), not raw phrases.
+        // Extra params like sortBy on this endpoint return HTTP 400.
+        searchKey: options.search.includes(":")
+          ? options.search
+          : `entire:${options.search.replace(/\s+/g, " ").trim()}`,
         limit,
         start,
         includeto: true,
-        // Emails received before "now" — required for search to return history
         receivedTime: Date.now(),
-        sortBy: "date",
-        sortorder: false, // descending = newest first
       },
       context: {
         action: "searchMessages",
