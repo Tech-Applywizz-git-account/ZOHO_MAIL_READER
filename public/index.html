@@ -6,17 +6,39 @@
   <title>Zoho Mail Connector</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" /></noscript>
   <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
-  <div class="app">
+  <div id="loginScreen" class="login-screen">
+    <form id="loginForm" class="login-card" autocomplete="on">
+      <p class="brand">ApplyWizard · Zoho Mail</p>
+      <h1>Sign in</h1>
+      <p class="login-sub">Enter your credentials to open the mailbox connector.</p>
+      <label class="field">
+        <span>Username</span>
+        <input id="loginUser" type="text" name="username" autocomplete="username" required />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input id="loginPass" type="password" name="password" autocomplete="current-password" required />
+      </label>
+      <p id="loginError" class="login-error" hidden>Invalid username or password.</p>
+      <button type="submit" class="primary login-submit">Continue</button>
+    </form>
+  </div>
+
+  <div id="appRoot" class="app hidden">
     <header class="top">
       <div>
         <p class="brand">ApplyWizard · Zoho Mail</p>
         <h1>Mailbox connector</h1>
       </div>
-      <div class="stats" id="stats">Loading…</div>
+      <div class="top-actions">
+        <div class="stats" id="stats">Loading…</div>
+        <button type="button" id="logoutBtn" class="ghost logout-btn">Log out</button>
+      </div>
     </header>
 
     <main class="layout">

@@ -1,5 +1,8 @@
 (() => {
   const PAGE_SIZE = 40;
+  const AUTH_KEY = "zoho_ui_auth";
+  const UI_USER = "Created@123";
+  const UI_PASS = "Applywizz@2026";
 
   const state = {
     users: [],
@@ -14,9 +17,17 @@
     hasMore: false,
     loadingMore: false,
     totalMatched: 0,
+    bootstrapped: false,
   };
 
   const el = {
+    loginScreen: document.getElementById("loginScreen"),
+    loginForm: document.getElementById("loginForm"),
+    loginUser: document.getElementById("loginUser"),
+    loginPass: document.getElementById("loginPass"),
+    loginError: document.getElementById("loginError"),
+    appRoot: document.getElementById("appRoot"),
+    logoutBtn: document.getElementById("logoutBtn"),
     stats: document.getElementById("stats"),
     userList: document.getElementById("userList"),
     search: document.getElementById("search"),
@@ -43,6 +54,36 @@
     refreshUsers: document.getElementById("refreshUsers"),
     toast: document.getElementById("toast"),
   };
+
+  function isLoggedIn() {
+    try {
+      return sessionStorage.getItem(AUTH_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function setLoggedIn(value) {
+    try {
+      if (value) sessionStorage.setItem(AUTH_KEY, "1");
+      else sessionStorage.removeItem(AUTH_KEY);
+    } catch {
+      /* ignore storage errors */
+    }
+  }
+
+  function showLogin() {
+    el.loginScreen.classList.remove("hidden");
+    el.appRoot.classList.add("hidden");
+    el.loginError.hidden = true;
+    el.loginPass.value = "";
+    el.loginUser.focus();
+  }
+
+  function showApp() {
+    el.loginScreen.classList.add("hidden");
+    el.appRoot.classList.remove("hidden");
+  }
 
   function showToast(message, kind = "ok") {
     el.toast.hidden = false;
@@ -423,40 +464,78 @@
     return template.innerHTML;
   }
 
-  document.querySelectorAll(".chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      document
-        .querySelectorAll(".chip")
-        .forEach((c) => c.classList.remove("active"));
-      chip.classList.add("active");
-      state.filter = chip.dataset.filter || "all";
+  function bindAppEvents() {
+    if (state.bootstrapped) return;
+    state.bootstrapped = true;
+
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document
+          .querySelectorAll(".chip")
+          .forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        state.filter = chip.dataset.filter || "all";
+        renderUsers();
+      });
+    });
+
+    el.search.addEventListener("input", () => {
+      state.search = el.search.value;
       renderUsers();
     });
-  });
-
-  el.search.addEventListener("input", () => {
-    state.search = el.search.value;
-    renderUsers();
-  });
-  el.connectBtn.addEventListener("click", connectMailbox);
-  el.readMailsBtn.addEventListener("click", readMails);
-  if (el.loadMoreBtn) {
-    el.loadMoreBtn.addEventListener("click", loadMoreMails);
-  }
-  el.refreshUsers.addEventListener("click", () => {
-    loadUsers(true).catch((e) => showToast(e.message, "err"));
-  });
-
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("ok") === "1" && params.get("connected")) {
-    const email = params.get("connected");
-    showToast(`Connected ${email}`, "ok");
-    state.selectedEmail = email;
-    history.replaceState({}, "", "/");
+    el.connectBtn.addEventListener("click", connectMailbox);
+    el.readMailsBtn.addEventListener("click", readMails);
+    if (el.loadMoreBtn) {
+      el.loadMoreBtn.addEventListener("click", loadMoreMails);
+    }
+    el.refreshUsers.addEventListener("click", () => {
+      loadUsers(true).catch((e) => showToast(e.message, "err"));
+    });
+    if (el.logoutBtn) {
+      el.logoutBtn.addEventListener("click", () => {
+        setLoggedIn(false);
+        showLogin();
+      });
+    }
   }
 
-  loadUsers().catch((error) => {
-    el.stats.textContent = "Failed to load users";
-    showToast(error.message || String(error), "err");
+  function handleOauthReturn() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("ok") === "1" && params.get("connected")) {
+      const email = params.get("connected");
+      showToast(`Connected ${email}`, "ok");
+      state.selectedEmail = email;
+      history.replaceState({}, "", "/");
+    }
+  }
+
+  function enterApp() {
+    showApp();
+    bindAppEvents();
+    handleOauthReturn();
+    loadUsers().catch((error) => {
+      el.stats.textContent = "Failed to load users";
+      showToast(error.message || String(error), "err");
+    });
+  }
+
+  el.loginForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const user = el.loginUser.value.trim();
+    const pass = el.loginPass.value;
+    if (user === UI_USER && pass === UI_PASS) {
+      setLoggedIn(true);
+      el.loginError.hidden = true;
+      enterApp();
+      return;
+    }
+    el.loginError.hidden = false;
+    el.loginPass.focus();
   });
+
+  if (isLoggedIn()) {
+    enterApp();
+  } else {
+    showLogin();
+  }
 })();

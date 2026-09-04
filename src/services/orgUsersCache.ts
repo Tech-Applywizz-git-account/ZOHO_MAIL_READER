@@ -1,7 +1,7 @@
 import { OrgUserSummary } from "../types/zoho.types";
 import { getOrganizationAccounts } from "./zohoOrganization.service";
 
-const TTL_MS = 10 * 60 * 1000;
+const TTL_MS = 30 * 60 * 1000;
 
 let cache: { fetchedAt: number; users: OrgUserSummary[] } | null = null;
 let inflight: Promise<OrgUserSummary[]> | null = null;

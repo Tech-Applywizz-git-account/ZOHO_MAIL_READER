@@ -192,7 +192,8 @@ export async function getOrganizationUsers(options?: {
 export async function getAllOrganizationUsers(): Promise<OrgUserSummary[]> {
   const all: OrgUserSummary[] = [];
   let start = 0;
-  const limit = 50;
+  // Zoho allows up to 200 per page — fewer round-trips for large orgs.
+  const limit = 200;
 
   for (;;) {
     const page = await getOrganizationUsers({ start, limit });
